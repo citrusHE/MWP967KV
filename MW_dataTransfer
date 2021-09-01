@@ -1,0 +1,104 @@
+
+function MW_dataTransfer( start,until )
+%格式为 xxxx-xx-xx HH:MM:SS
+
+%%  MW_DATATRANSFER 批量将微波辐射计的数据导入，并画图，画四张图，Temp(k)        VaporDensity        Liquid        RH%
+
+%%    Detailed explanation goes here
+%%数据的格式为三维数组M[1:58,1:6,1:t}，为m*n*t=58*5*t维,其中M为行数代表着不同高度共58层，
+% n代表不同的要素：
+%%分别为高度Height（m)        Temp(k)        VaporDensity        Liquid        RH%
+
+%%  1.提取LV2级别数据
+suf= 'LV2.csv';            
+%dd = dir(['*' suf]);
+dd=[];
+start=datetime(start);
+until=datetime(until);
+date=start:caldays(1):until;
+for d=1:length(date)
+    d1=dir(['ZP' datestr(date(d),'yyyy-mm-dd') '*' suf]);
+    if length(d1)==1
+    dd=[dd,d1];
+    else
+        dd=[dd,d1'];
+    end
+end
+%%  2.选取起始数据文件建立全维度矩阵
+filename=dd(1);
+%设置第一个时间启示文件
+M=importdata(filename.name);
+data = M.data;
+type=data(:,1);
+data(:,1:9)=[];
+time=M.textdata;
+time(1:2,:)=[];
+time=time(:,2);
+height=1:58;
+
+%% 3.设置全矩阵维度和时间参数
+MW_m=58; %58个高度层
+MW_n=5;    %5个要素
+MW_t=length(dd)*48;    %48个时次 按照文件数目更改 文件数*48
+%从第一行第四列开始读入数据,M_m代表行数，M_n代表列数
+
+
+%%  4.将数据读入数组 MW_data中
+MW_data_all=[];
+for t=1:length(dd)
+   %读取文件夹里全部文件  
+   try
+     M=importdata(dd(t).name);
+    data = M.data;
+    type=data(:,1);
+    data(:,1:9)=[];
+    time=M.textdata; time(1:2,:)=[];
+     time=time(:,2);
+    if isempty(cell2mat(time(1,1)))
+        time(1,:)=[];   
+    else
+        if cell2mat(time(1,1))==cell2mat(time(5,1))
+            time(1,:)=[]; 
+        else
+             time=time;
+        end
+        
+    end
+    %time=datetime(time,'InputFormat','yyyy-MM-dd HH:mm:ss');
+    time=datenum(time);
+     catch
+      disp(['error occur while read the ',dd(t).name]);   
+     end   
+     %读入到M中的数据进行维度判断，合适加入三维矩阵中
+     timex=repmat(time , 1 , 58);
+     typex=repmat(type , 1 , 58);
+     height=1:58;
+     height=repmat(height,length(time(:,1)),1);
+     MW_data=[data,typex,timex,height];
+     MW_data=reshape(MW_data,length(time),58,[]);
+     %数据存在在一个三维矩阵中
+     MW_data_all=[MW_data_all;MW_data];
+end
+   %为温度的数据，并进行重新排列为m*t维
+    %  VaporDensity        Liquid        RH%
+   %data=reshape(MW_data_all((1:4:length(time)),:,:),length(time)/4,[]);
+     T_data=reshape(MW_data_all(MW_data_all(:,:,2)==11),length(MW_data_all(:,1,:))/4,[]);
+     VaporDensity_data=reshape(MW_data_all(MW_data_all(:,:,2)==12),length(MW_data_all(:,1,:))/4,[]);
+     Liquid_data=reshape(MW_data_all(MW_data_all(:,:,2)==14),length(MW_data_all(:,1,:))/4,[]);
+     RH_data=reshape(MW_data_all(MW_data_all(:,:,2)==13),length(MW_data_all(:,1,:))/4,[]);
+     H_data=MW_data_all((1:4:length(MW_data_all(:,1,:))),:,4);
+     %高度，其实是y轴对应的数据，
+    % x_data =datestr(MW_data_all(:,:,3),31);31代表格式'yyyy-MM-dd HH:mm:ss'
+    x_data =MW_data_all((1:4:length(MW_data_all(:,1,:))),:,3);
+%%  修改时间的次数，为x轴应对的数据
+    x_ticks=x_data((1:6000:length(x_data)),1);
+    datastr_tick_label= datestr(x_ticks,'dd/mm HH时');
+    
+ 
+%开始绘图%
+draw_pcolor( x_data,H_data,T_data,'T','T',x_ticks,datastr_tick_label);
+draw_pcolor( x_data,H_data,VaporDensity_data,'VaporDensity','VaporDensity',x_ticks,datastr_tick_label);
+draw_pcolor( x_data,H_data,Liquid_data,'Liquid','Liquid',x_ticks,datastr_tick_label);
+draw_pcolor( x_data,H_data,RH_data,'RH','RH',x_ticks,datastr_tick_label);
+%
+end
